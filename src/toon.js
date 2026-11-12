@@ -128,7 +128,7 @@ vec3 transformed = vec3( position );
 #endif
 {
   float hh = max(position.y, 0.0);
-  float amp = hh * hh * 0.0015 * uWind;
+  float amp = hh * min(hh, 12.0) * 0.0015 * uWind;   // (linear above 12 m, so the tall canopy trees don't whip about)
   float t = uTime;
   transformed.x += (sin(t * 1.25 + swPh.x * 0.11 + swPh.y * 0.07) + 0.4 * sin(t * 2.3 + swPh.x * 0.3)) * amp;
   transformed.z += cos(t * 1.05 + swPh.y * 0.12 - swPh.x * 0.05) * amp * 0.8;

@@ -336,19 +336,32 @@ export class ChunkManager {
         else sp = 'birch';
 
         const id = `${ch.cx}:${ch.cz}:${idx}`;
+        // Size: a century-old second-growth forest is layered. Most stems reach the canopy, whose height here is the real
+        // one (LANDFIRE canopy height at this spot, median about 19 m in the park); under it a middle layer and young
+        // understory trees; now and then an old veteran stands above the rest. Trees at the water's edge grow up in the
+        // open, shorter and broader. Canopy and veteran trees use the mature models (long clear trunks, crowns high
+        // overhead), scaled down for the middle layer; the young, bushy models are the understory saplings.
         const models = this.treeModels[sp];
-        const v = Math.floor(rng() * models.length);
+        const hc = canopyAt(x, z), can = hc > 0 ? hc : 17;   // real canopy height (m); 0 = unknown
+        const cr = rng();
+        let cls = cr < 0.15 ? 'under' : cr < 0.4 ? 'mid' : cr < 0.94 ? 'canopy' : 'veteran';
+        if (sdf < 14 && cls === 'canopy' && rng() < 0.5) cls = 'mid';
+        if (cls === 'veteran' && (can < 14 || sp === 'birch')) cls = 'canopy';   // (birches are short-lived pioneers)
+        const mature = cls !== 'under';   // (mid-story trees too: in a closed forest they shed their shaded lower limbs, slim poles with crowns well up)
+        const pool = []; models.forEach((m, i) => { if (!!m.mature === mature) pool.push(i); });
+        const v = pool.length ? pool[Math.floor(rng() * pool.length)] : Math.floor(rng() * models.length);
         const g = models[v];
-        const hc = canopyAt(x, z);   // real canopy height (m); 0 = unknown
-        const real = hc > 0 ? Math.min(1.3, Math.max(0.7, 0.55 + 0.45 * hc / 19)) : 1;
-        const s = (0.78 + rng() * 0.62) * real;
-        const sy = s * (0.9 + rng() * 0.22);
+        let want = can * { under: 0.24 + rng() * 0.18, mid: 0.5 + rng() * 0.25, canopy: 0.86 + rng() * 0.24, veteran: 1.16 + rng() * 0.22 }[cls];
+        if (sp === 'pine' && mature) want *= 1.12;   // white pines stand over the hardwoods
+        if (sp === 'birch') want = Math.min(want, 19);
+        const sy = clamp(want / g.H, mature ? 0.6 : 0.32, mature ? 1.5 : 1.4);
+        const s = sy * (0.86 + rng() * 0.26) * (cls === 'veteran' ? 1.22 : 1);   // girth and crown spread
         const yaw = rng() * Math.PI * 2;
         const leanMax = sp === 'pine' ? 0.025 : 0.06;
         const lx = (rng() - 0.5) * leanMax * 2, lz = (rng() - 0.5) * leanMax * 2;
         const color = treeColor(sp, x, z, wet, rng);
         const radius = g.rBase * s * 1.1;
-        const base = { id, sp, v, x, y: y - 0.15, z, yaw, lx, lz, sx: s, sy, radius, H: g.H * sy };
+        const base = { id, sp, v, x, y: y - 0.15, z, yaw, lx, lz, sx: s, sy, radius, H: g.H * sy, cls };
 
         if (this.felled.has(id)) continue; // already chopped down: stump handled separately
 
