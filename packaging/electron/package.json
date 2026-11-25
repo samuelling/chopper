@@ -9,7 +9,8 @@
     "prebuild-game": "cd ../.. && node tools/build.mjs",
     "start": "npm run prebuild-game && electron .",
     "dist:mac": "npm run prebuild-game && electron-builder --mac",
-    "dist:win": "npm run prebuild-game && electron-builder --win"
+    "dist:win": "npm run prebuild-game && electron-builder --win",
+    "dist:mas": "npm run prebuild-game && electron-builder --mac mas --universal -c.appId=com.samuelling.ashland"
   },
   "devDependencies": {
     "electron": "^45.1.0",
@@ -53,6 +54,18 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "mas": {
+      "type": "distribution",
+      "hardenedRuntime": false,
+      "entitlements": "build/entitlements.mas.plist",
+      "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+      "entitlementsLoginHelper": "build/entitlements.mas.inherit.plist",
+      "provisioningProfile": "build/embedded.provisionprofile",
+      "extendInfo": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "ElectronTeamID": "Y4HDFDP479"
+      }
     }
   }
 }

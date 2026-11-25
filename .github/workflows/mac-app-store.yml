@@ -1,0 +1,78 @@
+# Builds Ashland for the Mac App Store: a sandboxed, universal (Apple silicon + Intel) .pkg signed with the Mac App
+# Distribution and Mac Installer Distribution certificates, with the Mac App Store provisioning profile for
+# com.samuelling.ashland (packaging/electron/build/embedded.provisionprofile). It goes on the same App Store Connect
+# record as the iPhone/iPad app ("Ashland State Park"), as its macOS version.
+#
+# Run it from the Actions tab (Mac App Store > Run workflow), giving the version and a build number higher than the last.
+#
+# Repository secrets it needs:
+#   MAS_CERT_P12_BASE64        "3rd Party Mac Developer Application" certificate + key, .p12, base64
+#   MAS_INSTALLER_P12_BASE64   "3rd Party Mac Developer Installer" certificate + key, .p12, base64
+#   MAS_CERT_PASSWORD          the password of both .p12 files
+# And, to upload straight to App Store Connect (otherwise download the .pkg artifact and send it with Transporter):
+#   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD   (the same ones the DMG workflow uses for notarizing)
+name: Mac App Store
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version (CFBundleShortVersionString)
+        default: '1.0.0'
+      build:
+        description: Build number (must go up with every upload)
+        default: '1'
+permissions:
+  contents: read
+jobs:
+  mas:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Certificates
+        env:
+          APP_P12: ${{ secrets.MAS_CERT_P12_BASE64 }}
+          INST_P12: ${{ secrets.MAS_INSTALLER_P12_BASE64 }}
+        run: |
+          if [ -z "$APP_P12" ] || [ -z "$INST_P12" ]; then echo "::error::Add the MAS_CERT_P12_BASE64, MAS_INSTALLER_P12_BASE64 and MAS_CERT_PASSWORD secrets first."; exit 1; fi
+          printf %s "$APP_P12" | base64 -D > "$RUNNER_TEMP/app.p12"
+          printf %s "$INST_P12" | base64 -D > "$RUNNER_TEMP/installer.p12"
+          echo "app.p12 $(wc -c < "$RUNNER_TEMP/app.p12") bytes, installer.p12 $(wc -c < "$RUNNER_TEMP/installer.p12") bytes"
+      - name: Build the sandboxed app and the .pkg
+        working-directory: packaging/electron
+        env:
+          CSC_LINK: ${{ runner.temp }}/app.p12
+          CSC_KEY_PASSWORD: ${{ secrets.MAS_CERT_PASSWORD }}
+          CSC_INSTALLER_LINK: ${{ runner.temp }}/installer.p12
+          CSC_INSTALLER_KEY_PASSWORD: ${{ secrets.MAS_CERT_PASSWORD }}
+        run: |
+          npm ci
+          npm run prebuild-game
+          npx electron-builder --mac mas --universal \
+            -c.appId=com.samuelling.ashland \
+            -c.extraMetadata.version="${{ inputs.version }}" \
+            -c.buildVersion="${{ inputs.build }}" \
+            -c.artifactName='Ashland-${version}-mas.${ext}'
+          ls -la dist
+      - name: Check the app and the package
+        working-directory: packaging/electron
+        run: |
+          app=$(ls -d dist/mas-universal/*.app | head -1)
+          lipo -info "$app/Contents/MacOS/Ashland"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -d --entitlements - "$app" 2>/dev/null | grep -E "app-sandbox|application-identifier|team-identifier" || true
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" "$app/Contents/Info.plist"
+          pkgutil --check-signature dist/*.pkg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ashland-mas
+          path: packaging/electron/dist/*.pkg
+      - name: Upload to App Store Connect
+        env:
+          AID: ${{ secrets.APPLE_ID }}
+          ASP: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          if [ -z "$AID" ] || [ -z "$ASP" ]; then echo "No APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD: download the Ashland-mas artifact and send it with Transporter."; exit 0; fi
+          xcrun altool --upload-app --type macos --file "$(ls packaging/electron/dist/*.pkg | head -1)" --username "$AID" --password "$ASP"

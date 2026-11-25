@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Mac App Store build: the sandbox Apple requires, the app group Electron's helpers share, and read access to a folder
+     the player picks themselves (the optional Claude Code log). -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.app-sandbox</key><true/>
+  <key>com.apple.security.application-groups</key>
+  <array><string>Y4HDFDP479.com.samuelling.ashland</string></array>
+  <key>com.apple.security.files.user-selected.read-only</key><true/>
+</dict>
+</plist>
